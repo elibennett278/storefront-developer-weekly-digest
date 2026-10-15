@@ -1,0 +1,26 @@
+{
+  "builds": [
+    {
+      "project": "checkout-web",
+      "status": "failed",
+      "revision": "a81c9de",
+      "occurred_at": "2026-08-31T14:20:00Z"
+    }
+  ],
+  "releases": [
+    {
+      "storefront": "eu-store",
+      "version": "2026.09.1",
+      "action": "deployed",
+      "occurred_at": "2026-09-01T09:10:00Z"
+    }
+  ],
+  "diagnostics": [
+    {
+      "service": "checkout-api",
+      "severity": "warning",
+      "summary": "Payment sandbox contract changed",
+      "occurred_at": "2026-09-02T16:45:00Z"
+    }
+  ]
+}
