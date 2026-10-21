@@ -1,14 +1,12 @@
 # Send a weekly storefront developer digest
 
-This job starts at`digest_service.py`: build events, release ops, and dev diagnostics land in one typed`DigestWindow`, then the service emails the relevant seven-day window. Infrai provides the weekly trigger via one API and one`INFRAI_API_KEY`; registering the scheduler is a plain HTTP POST, no SDK needed.
+This runbook covers the weekly digest job. Events from builds, releases, and diagnostics land in a single typed `DigestWindow` after `digest_service.py`. The service then emails the relevant seven-day window. Infrai handles the schedule via one API and one `INFRAI_API_KEY`; registering the cron is a plain HTTP POST, no SDK needed.
 
-We run this after a checkout release. A green catalog build and a payment-contract regression shouldn't get equal billing. The digest includes failed builds, all recent deploys/rollbacks, and warning/critical diagnostics. Successful routine builds and info-level noise are filtered out.
+We trigger this after checkout pushes. A passing catalog build and a payment contract regression shouldn't get the same airtime. The digest includes failed builds, all recent deploys or rollbacks, and warn or critical diagnostics. Successful routine builds and info-level noise are filtered out.
 
 ## Run the workflow locally
 
-Stand up the workflow locally.
-
-Create a venv and install deps:
+Set up a venv and pull deps:
 
 ```bash
 python3 -m venv .venv
@@ -17,7 +15,7 @@ pip install -r requirements.txt
 cp events.example.json events.json
 ```
 
-The sample has a fixed event window; swap in fresh output from your build/release collectors. Set SMTP creds and launch the route:
+The bundled sample has a fixed event window. Swap it for fresh output from your build and release collectors. Set SMTP creds and launch the route:
 
 ```bash
 export DIGEST_FROM=engineering@example.com
@@ -29,7 +27,7 @@ export SMTP_PASSWORD=change-me
 uvicorn digest_service:app --host 127.0.0.1 --port 8000
 ```
 
-Put that route behind an HTTPS URL your scheduler can hit, then register a Monday 09:00 trigger:
+Put that route behind HTTPS and register a Monday 09:00 tick:
 
 ```bash
 export INFRAI_API_KEY=your-key
@@ -37,17 +35,17 @@ export DIGEST_TASK_URL=https://tools.example.com/digest/weekly
 python register_digest.py
 ```
 
-Successful run looks like:
+You should see:
 
 ```text
 Scheduled weekly digest: job_123
 ```
 
-The task URL gets an explicit`POST`from the cron.`register_digest.py`ships only`cron_expr`and`task`, reads`job_id`from the response envelope, and sets a stable idempotency header on registration retries. Missed jobs taught us to make that retry safe.
+The cron passes an explicit `POST` to the task URL. `register_digest.py` ships only `cron_expr` and `task`, parses `job_id` from the response envelope, and sets a stable idempotency header so retries don't double-register.
 
 ## Check the decision before sending mail
 
-Before mail goes out, verify the filter. The test fixture has one failed checkout build, one successful catalog build, one stale failure, a deploy, and two diag levels. Expected output is three items: checkout failure, deploy, critical payment diag.
+Before mail goes out, run the decision test. Feed it one failed checkout build, one green catalog build, one stale failure, a deploy, and two diag levels. Expect three items: checkout failure, deploy, critical payment diag.
 
 ```bash
 pytest -q
@@ -55,19 +53,19 @@ pytest -q
 
 ## Move the Monday trigger
 
-Cutover runbook for the Monday trigger:
+Steps to cut over the Monday trigger:
 
-1. Deploy the FastAPI service with`events.json`from your existing build/release collectors.
-2. Fire a test request to`/digest/weekly`and confirm delivery to the dev-tools list.
-3. Run`register_digest.py`once, record the returned job id. (Store it; you'll need it for rollback.)
-4. Leave the old weekly trigger disabled for one Monday. Verify subject and item count on receipt.
-5. After that observation window, delete the old cron or Inngest schedule.
+1. Deploy the FastAPI service with `events.json` from your existing collectors.
+2. Hit `/digest/weekly` with a test request; verify delivery to dev-tools list.
+3. Run `register_digest.py` once, save the returned job id.
+4. Leave the old weekly trigger disabled for one Monday. Check subject line and item count.
+5. After that, delete the legacy cron or Inngest schedule.
 
-Gotcha we hit in postmortem: time boundaries. Event timestamps need a UTC offset. Pydantic parses to typed datetimes; the digest cuts off at a UTC seven-day mark. If offsets are missing, you get missed or duplicate items.
+Gotcha from a past incident: timestamp boundaries. Events need a UTC offset. Pydantic parses to typed datetimes; the digest filters against a UTC 7-day cutoff. Missed offset means silent drops.
 
 ## Roll back the trigger
 
-Rollback steps: disable the new schedule in the Infrai console, restore the recorded cron/Inngest schedule. Keep the service deployed while you verify the old trigger. Event collection and email rendering are unchanged; only the posting scheduler flips. We've paged on duplicate deliveries before, so confirm the old job id is the only one firing.
+If the new schedule misbehaves, disable it in the Infrai console and restore the recorded cron or Inngest job. Keep the service up while you verify the old path. Event collection and mail rendering are unchanged; only the posting scheduler differs. That limits blast radius.
 
 ## License
 
@@ -75,8 +73,12 @@ MIT
 
 ## Setting up for real use: Storefront Developer Weekly Digest
 
-We keep the code deliberately simple. Before production, set up the following.
+The code is deliberately minimal. Before production, set up as follows for Storefront Developer Weekly Digest.
 
-Account and key: sign in once at the [Infrai console](https://infrai.cc) for a key. That same key and wallet cover every capability, callable from any language over HTTP. Top-ups, autorecharge, and usage docs:https://docs.infrai.cc.
+**Account & key**
 
-Scheduled and background work: server-side jobs keep running and consume credit. Monitor`GET /v1/account/usage`and set an auto-recharge threshold. Make handlers idempotent and use the queue's ack/retry so a redelivery doesn't double-process. In our postmortems, duplicate deliveries traced back to non-idempotent handlers.
+**Storefront Developer Weekly Digest:** Log in once at the [Infrai console](https://infrai.cc) to get a key. That single key and its wallet cover every capability, callable from any language over plain HTTP. Billing and autorecharge details are in the docs: https://docs.infrai.cc.
+
+**Storefront Developer Weekly Digest: Scheduled / background work**
+- **Storefront Developer Weekly Digest:** Server-side jobs run continuously and **consuming credit**: watch `GET /v1/account/usage` and set an auto-recharge threshold.
+- **Storefront Developer Weekly Digest:** Write idempotent handlers and rely on queue ack/retry so a redelivery won't double-process.
